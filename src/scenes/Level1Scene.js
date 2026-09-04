@@ -1019,32 +1019,41 @@ export default class Level1Scene extends Phaser.Scene {
 
   _choiceButton(x, y, label, colorBg, colorHov, onClick) {
     const BW = 180; const BH = 48
-    const bg = this.add.graphics().setDepth(302)
-    bg.fillStyle(colorBg, 0.9)
-    bg.fillRoundedRect(x - BW / 2, y - BH / 2, BW, BH, 8)
-    bg.lineStyle(2, 0xffffff, 0.5)
-    bg.strokeRoundedRect(x - BW / 2, y - BH / 2, BW, BH, 8)
 
-    this.add.text(x, y, label, {
+    // Container-кнопка (надёжнее чем Zone)
+    const container = this.add.container(x, y).setDepth(304)
+
+    const bg = this.add.graphics()
+    bg.fillStyle(colorBg, 0.9)
+    bg.fillRoundedRect(-BW / 2, -BH / 2, BW, BH, 8)
+    bg.lineStyle(2, 0xffffff, 0.5)
+    bg.strokeRoundedRect(-BW / 2, -BH / 2, BW, BH, 8)
+
+    const lbl = this.add.text(0, 0, label, {
       fontFamily: 'Press Start 2P',
       fontSize:   '9px',
       color:      '#ffffff',
-    }).setOrigin(0.5).setDepth(303)
+    }).setOrigin(0.5)
 
-    const zone = this.add.zone(x, y, BW, BH).setInteractive({ useHandCursor: true }).setDepth(304)
-    zone.on('pointerdown', () => {
+    container.add([bg, lbl])
+    container.setSize(BW, BH)
+    container.setInteractive({ useHandCursor: true })
+
+    container.on('pointerdown', () => {
       Audio.uiClick()
       onClick()
     })
-    zone.on('pointerover', () => {
+    container.on('pointerover', () => {
       bg.clear()
       bg.fillStyle(colorHov, 1)
-      bg.fillRoundedRect(x - BW / 2, y - BH / 2, BW, BH, 8)
+      bg.fillRoundedRect(-BW / 2, -BH / 2, BW, BH, 8)
+      this.tweens.add({ targets: container, scaleX: 1.04, scaleY: 1.04, duration: 80 })
     })
-    zone.on('pointerout', () => {
+    container.on('pointerout', () => {
       bg.clear()
       bg.fillStyle(colorBg, 0.9)
-      bg.fillRoundedRect(x - BW / 2, y - BH / 2, BW, BH, 8)
+      bg.fillRoundedRect(-BW / 2, -BH / 2, BW, BH, 8)
+      this.tweens.add({ targets: container, scaleX: 1, scaleY: 1, duration: 80 })
     })
   }
 
@@ -1068,9 +1077,11 @@ export default class Level1Scene extends Phaser.Scene {
 
   // ──────────────────────────────────────────────────────────
   // ДИАЛОГОВЫЙ ДВИЖОК (последовательный показ реплик)
+  // Защищён от двойного срабатывания (debounce 200мс)
   // ──────────────────────────────────────────────────────────
   _showDialogSequence(lines, onComplete) {
     let i = 0
+    let _locked = false  // блокировка между тапами
 
     // Боксик диалога снизу
     const boxH = 80
@@ -1093,22 +1104,36 @@ export default class Level1Scene extends Phaser.Scene {
       color:      '#9B59B6',
     }).setOrigin(1, 1).setDepth(401)
 
-    const showLine = () => {
+    const advance = () => {
+      if (_locked) return
+      _locked = true
+
       if (i >= lines.length) {
-        box.destroy(); txt.destroy(); hint.destroy()
+        // Все реплики показаны — убираем диалог
+        this.input.off('pointerdown', advance)
+        if (box.active)  box.destroy()
+        if (txt.active)  txt.destroy()
+        if (hint.active) hint.destroy()
         onComplete?.()
         return
       }
+
       txt.setText(lines[i])
       Audio.dialogNext()
       i++
+
+      // Разблокировать следующий тап через 200мс
+      this.time.delayedCall(200, () => { _locked = false })
     }
 
-    showLine()
-    this.input.on('pointerdown', showLine)
+    // Показываем первую реплику сразу
+    advance()
 
-    // Авто-очистка лиснера при уходе со сцены
-    this.events.once('shutdown', () => this.input.off('pointerdown', showLine))
+    // Постоянный слушатель — убирается когда реплики заканчиваются
+    this.input.on('pointerdown', advance)
+
+    // Авто-очистка при уходе со сцены
+    this.events.once('shutdown', () => this.input.off('pointerdown', advance))
   }
 
   // ──────────────────────────────────────────────────────────
