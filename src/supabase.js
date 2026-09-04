@@ -9,7 +9,8 @@
 import { createClient } from '@supabase/supabase-js'
 
 // Ключи берутся из .env файла (VITE_ префикс обязателен)
-const SUPABASE_URL     = import.meta.env.VITE_SUPABASE_URL
+const rawUrl           = import.meta.env.VITE_SUPABASE_URL || ''
+const SUPABASE_URL     = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '')
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 // Инициализируем клиент Supabase
