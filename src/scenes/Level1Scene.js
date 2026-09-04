@@ -47,7 +47,8 @@ export default class Level1Scene extends Phaser.Scene {
   constructor() { super('Level1Scene') }
 
   // ────────────────────────────────────────────────────────
-  init() {
+  init(data = {}) {
+    this._isRetry     = data?.isRetry || false
     this._state       = 'INTRO'   // текущее состояние
     this._worldSpeed  = BASE_SPEED
     this._distance    = 0         // пройденные пиксели
@@ -170,10 +171,22 @@ export default class Level1Scene extends Phaser.Scene {
     this._coinTimer     = null
     this._boostSpawnTimer = null
 
-    // ── Запуск интро ─────────────────────────────────────
+    // ── Очистка при завершении сцены ─────────────────────
+    this.events.once('shutdown', this.shutdown, this)
+
+    // ── Запуск игры (при ретрае сразу бежим без повтора интро!) ──
     this.cameras.main.setAlpha(0)
-    this.tweens.add({ targets: this.cameras.main, alpha: 1, duration: 600,
-      onComplete: () => this._startIntro()
+    this.tweens.add({
+      targets:  this.cameras.main,
+      alpha:    1,
+      duration: 300,
+      onComplete: () => {
+        if (this._isRetry) {
+          this._endIntro()
+        } else {
+          this._startIntro()
+        }
+      }
     })
   }
 
@@ -746,20 +759,21 @@ export default class Level1Scene extends Phaser.Scene {
     this._state = 'DEAD'
 
     Audio.death()
-    this.cameras.main.shake(400, 0.02)
+    this.cameras.main.shake(350, 0.015)
 
     // Малечка падает
-    this._malechka.setVelocityY(-300)
-    this._malechka.setVelocityX(-100)
-    this._malechka.setAngularVelocity(300)
+    this._malechka.setVelocityY(-320)
+    this._malechka.setVelocityX(-80)
+    this._malechka.setAngularVelocity(250)
     this._malechka.setTint(0xFF4444)
 
     this._joystick.setVisible(false)
     this._buttons.setVisible(false)
 
-    this.time.delayedCall(1200, () => {
-      this.cameras.main.fadeOut(400)
-      this.time.delayedCall(400, () => {
+    // Быстрый и плавный переход на экран смерти
+    this.time.delayedCall(600, () => {
+      this.cameras.main.fadeOut(300)
+      this.time.delayedCall(300, () => {
         this.scene.start('DeathScene', {
           fromScene: 'Level1Scene',
           levelNum:  1,
@@ -1203,12 +1217,14 @@ export default class Level1Scene extends Phaser.Scene {
   // SHUTDOWN
   // ──────────────────────────────────────────────────────────
   shutdown() {
+    this.tweens.killAll()
+    this.time.removeAllEvents()
     this._joystick?.destroy()
     this._buttons?.destroy()
     this._hud?.destroy()
-    if (this._spawnTimer)     this._spawnTimer.remove()
-    if (this._coinTimer)      this._coinTimer.remove()
+    if (this._spawnTimer)      this._spawnTimer.remove()
+    if (this._coinTimer)       this._coinTimer.remove()
     if (this._boostSpawnTimer) this._boostSpawnTimer.remove()
-    if (this._ambientTimer)   this._ambientTimer.remove()
+    if (this._ambientTimer)    this._ambientTimer.remove()
   }
 }
