@@ -36,6 +36,8 @@ const config = {
     mode:       Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
     parent:     'game-container',
+    width:      854,
+    height:     480,
   },
 
   // Ввод
@@ -66,4 +68,32 @@ const config = {
 }
 
 const game = new Phaser.Game(config)
+
+// Гарантируем пересчёт масштаба при повороте устройства и изменении размера окна
+function refreshGameScale() {
+  if (game && game.scale) {
+    game.scale.refresh()
+  }
+}
+
+window.addEventListener('resize', () => {
+  refreshGameScale()
+  setTimeout(refreshGameScale, 150)
+  setTimeout(refreshGameScale, 400)
+})
+
+window.addEventListener('orientationchange', () => {
+  refreshGameScale()
+  setTimeout(refreshGameScale, 150)
+  setTimeout(refreshGameScale, 400)
+})
+
+if (screen.orientation && screen.orientation.addEventListener) {
+  screen.orientation.addEventListener('change', () => {
+    refreshGameScale()
+    setTimeout(refreshGameScale, 150)
+    setTimeout(refreshGameScale, 400)
+  })
+}
+
 export default game

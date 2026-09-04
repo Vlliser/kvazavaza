@@ -71,10 +71,16 @@ export const GSM = {
 
   // ── Сброс (новая игра) ───────────────────────────────────
   async reset() {
-    const { wipeGameState } = await import('./supabase.js')
-    await wipeGameState()
     this._state = { ...DEFAULT_GAME_STATE }
-    this._initialized = false
+    this._initialized = true
+    try {
+      localStorage.removeItem('kvazavaza_save')
+    } catch (e) {}
+
+    // Фоновая очистка без блокировки старта игры
+    import('./supabase.js')
+      .then(m => m.wipeGameState && m.wipeGameState())
+      .catch(err => console.warn('[GSM] Фоновая очистка Supabase:', err))
   },
 }
 

@@ -228,29 +228,30 @@ class MainMenuScene extends Phaser.Scene {
 
     container.add([shadow, bg, border, corner, text])
 
-    // Интерактивность
-    bg.setInteractive(
-      new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h),
-      Phaser.Geom.Rectangle.Contains
-    )
+    // Задаём размер контейнеру и делаем его интерактивным целиком
+    container.setSize(w, h)
+    container.setInteractive({ useHandCursor: true })
 
-    bg.on('pointerover', () => {
+    container.on('pointerover', () => {
       bg.setFillStyle(COLORS.btnHover)
       text.setColor('#FFD6FF')
       this.tweens.add({ targets: container, scaleX: 1.03, scaleY: 1.03, duration: 120 })
     })
 
-    bg.on('pointerout', () => {
+    container.on('pointerout', () => {
       bg.setFillStyle(COLORS.btnFill)
       text.setColor(COLORS.textBtn)
       this.tweens.add({ targets: container, scaleX: 1, scaleY: 1, duration: 120 })
     })
 
-    bg.on('pointerdown', () => {
+    container.on('pointerdown', () => {
+      bg.setFillStyle(0x3a0070)
       this.tweens.add({ targets: container, scaleX: 0.96, scaleY: 0.96, duration: 80, yoyo: true })
     })
 
-    bg.on('pointerup', () => {
+    container.on('pointerup', () => {
+      bg.setFillStyle(COLORS.btnFill)
+      Audio.uiClick()
       callback()
     })
 
@@ -356,8 +357,9 @@ class MainMenuScene extends Phaser.Scene {
     }
   }
 
-  async startNewGame() {
-    await GSM.reset()
+  startNewGame() {
+    Audio.uiClick()
+    GSM.reset().catch(e => console.warn(e))
     this.fadeToScene('Level1Scene')
   }
 
