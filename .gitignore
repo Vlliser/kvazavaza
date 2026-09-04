@@ -1,0 +1,21 @@
+# Зависимости — никогда не заливаем в git
+node_modules/
+
+# Собранный билд — Vercel собирает сам
+dist/
+
+# ВАЖНО: Файл с секретными ключами — НИКОГДА не заливаем!
+.env
+.env.local
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+
+# Логи
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
