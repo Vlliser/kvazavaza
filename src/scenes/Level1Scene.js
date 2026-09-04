@@ -128,18 +128,25 @@ export default class Level1Scene extends Phaser.Scene {
     this._upKey    = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP)
     this._wKey     = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W)
 
-    // Тап в любую точку экрана для прыжка (кроме джойстика)
+    // Тап в любую точку экрана для прыжка
+    // ВАЖНО: только когда RUNNING и не в зоне управления (левый джойстик / правые кнопки)
     this.input.on('pointerdown', (pointer) => {
-      if (this._state !== 'RUNNING') return
-      if (pointer.x < 150 && pointer.y > H - 170) return
+      if (this._state !== 'RUNNING') return  // блокируем во время INTRO / CUTSCENE / диалогов!
+      // Исключаем левый нижний (джойстик) и правый нижний (кнопки)
+      const inJoystick = pointer.x < 160 && pointer.y > H - 200
+      const inButtons  = pointer.x > W - 200 && pointer.y > H - 200
+      if (inJoystick || inButtons) return
       this._jump()
     })
 
-    // Свайп вверх тоже делает прыжок
+    // Свайп вверх тоже делает прыжок (но только в игровой зоне)
     this.input.on('pointerup', (pointer) => {
       if (this._state !== 'RUNNING') return
+      const inJoystick = pointer.x < 160 && pointer.y > H - 200
+      const inButtons  = pointer.x > W - 200 && pointer.y > H - 200
+      if (inJoystick || inButtons) return
       const dy = pointer.upY - pointer.downY
-      if (dy < -30) {
+      if (dy < -35) {
         this._jump()
       }
     })
@@ -1094,22 +1101,29 @@ export default class Level1Scene extends Phaser.Scene {
     }
 
     // ── Препятствия и предметы: движение и очистка ────────
-    this._obstacles.getChildren().forEach((obs) => {
+    // Используем slice() чтобы не мутировать массив во время итерации!
+    const obstacles = this._obstacles.getChildren().slice()
+    for (const obs of obstacles) {
+      if (!obs.active) continue
       obs.body.setVelocityX(-currentSpeed)
       if (obs.x < -80) obs.destroy()
-    })
-    this._coins_group.getChildren().forEach((coin) => {
+    }
+    const coins = this._coins_group.getChildren().slice()
+    for (const coin of coins) {
+      if (!coin.active) continue
       coin.body.setVelocityX(-currentSpeed)
-      if (coin._shine) coin._shine.setPosition(coin.x - 3, coin.y - 3)
+      if (coin._shine && coin._shine.active) coin._shine.setPosition(coin.x - 3, coin.y - 3)
       if (coin.x < -40) {
-        if (coin._shine) coin._shine.destroy()
+        if (coin._shine && coin._shine.active) coin._shine.destroy()
         coin.destroy()
       }
-    })
-    this._boosters.getChildren().forEach((b) => {
+    }
+    const boosters = this._boosters.getChildren().slice()
+    for (const b of boosters) {
+      if (!b.active) continue
       b.body.setVelocityX(-currentSpeed)
       if (b.x < -40) b.destroy()
-    })
+    }
 
     // ── Прыжок (клавиатура Пробел / Вверх / W / джойстик вверх) ──
     const jumpNow = Phaser.Input.Keyboard.JustDown(this._spaceKey)
