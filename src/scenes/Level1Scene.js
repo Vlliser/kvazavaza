@@ -21,25 +21,26 @@ import { HUD }             from '../ui/HUD.js'
 const W = 854
 const H = 480
 
-const GROUND_Y      = H - 80    // Y поверхности земли
+const GROUND_Y      = H - 80    // Y поверхности земли (400)
 const MALECHKA_X    = 180       // Малечка стоит на одном X (мир скроллится)
 const BASE_SPEED    = 220       // начальная скорость мира (px/s)
-const SPEED_ACCEL   = 4         // ускорение каждую секунду
-const MAX_SPEED     = 380
-const SHADOW_START  = -120      // стартовая позиция тени (визуальная дельта)
-const SHADOW_CATCH  = 30        // тень поймала Малечку когда дельта > -30
+const SPEED_ACCEL   = 3         // ускорение каждую секунду
+const MAX_SPEED     = 360
+const SHADOW_START  = -120      // стартовая позиция тени (180 - 120 = 60px, видна слева!)
+const SHADOW_CATCH  = -25       // тень поймала Малечку (180 - 25 = 155px)
+const DANGER_DIST   = -65       // порог предупреждения (тень ближе 65px)
 const JUMP_VEL      = -520      // скорость прыжка
 const BOOSTER_DUR   = 3000      // длительность бустера (мс)
 const BOOSTER_SPEED = 100       // бонусная скорость от бустера
+const GRACE_MS      = 4000      // мс неуязвимости после конца интро
 
-const LEVEL_END_DIST = 4000     // метров до конца уровня
-const DANGER_DIST    = -280     // порог предупреждения (тень близко)
+const LEVEL_END_DIST = 3500     // метров до конца уровня
 
-// Типы препятствий
+// Типы препятствий (умеренная высота, чтобы легко перепрыгивать)
 const OBSTACLES = [
-  { type: 'log',   w: 40, h: 28, color: 0x6B3A2A, label: 'бревно',  offsetY: 0    },
-  { type: 'fence', w: 20, h: 55, color: 0x8B7355, label: 'забор',   offsetY: 0    },
-  { type: 'snow',  w: 60, h: 22, color: 0xC8E6FF, label: 'горка',   offsetY: 6    },
+  { type: 'snow',  w: 46, h: 22, color: 0xC8E6FF, label: 'сугроб',   offsetY: 0 },
+  { type: 'log',   w: 36, h: 26, color: 0x7B3F2A, label: 'бревно',   offsetY: 0 },
+  { type: 'fence', w: 22, h: 36, color: 0x9B7A55, label: 'заборчик', offsetY: 0 },
 ]
 
 export default class Level1Scene extends Phaser.Scene {
@@ -59,6 +60,8 @@ export default class Level1Scene extends Phaser.Scene {
     this._coins         = GSM.get('shakarukhany') || 0
     this._dead          = false
     this._levelEnded    = false
+    this._graceTimer    = 0      // мс неуязвимости после интро
+    this._stumbleTimer  = 0      // мс неуязвимости после спотыкания
   }
 
   // ────────────────────────────────────────────────────────
@@ -92,10 +95,10 @@ export default class Level1Scene extends Phaser.Scene {
     // ── Тень ─────────────────────────────────────────────
     this._createShadow()
 
-    // ── Препятствия (пул) ─────────────────────────────────
-    this._obstacles   = this.physics.add.staticGroup()
-    this._coins_group = this.physics.add.staticGroup()
-    this._boosters    = this.physics.add.staticGroup()
+    // ── Препятствия и предметы (ДИНАМИЧЕСКИЕ группы) ─────
+    this._obstacles   = this.physics.add.group()
+    this._coins_group = this.physics.add.group()
+    this._boosters    = this.physics.add.group()
 
     // Коллизии
     this.physics.add.collider(this._malechka, this._ground,
@@ -120,8 +123,26 @@ export default class Level1Scene extends Phaser.Scene {
       onAttack: () => {},  // будет в уровне 2
     })
 
-    // Пробел (для отладки на ПК)
+    // Клавиатура (Пробел, Стрелка вверх, W)
     this._spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE)
+    this._upKey    = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP)
+    this._wKey     = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W)
+
+    // Тап в любую точку экрана для прыжка (кроме джойстика)
+    this.input.on('pointerdown', (pointer) => {
+      if (this._state !== 'RUNNING') return
+      if (pointer.x < 150 && pointer.y > H - 170) return
+      this._jump()
+    })
+
+    // Свайп вверх тоже делает прыжок
+    this.input.on('pointerup', (pointer) => {
+      if (this._state !== 'RUNNING') return
+      const dy = pointer.upY - pointer.downY
+      if (dy < -30) {
+        this._jump()
+      }
+    })
 
     // Скрыть управление во время INTRO
     this._joystick.setVisible(false)
@@ -375,46 +396,73 @@ export default class Level1Scene extends Phaser.Scene {
   // ТЕНЬ
   // ──────────────────────────────────────────────────────────
   _createShadow() {
+    if (this.textures.exists('shadow_tex')) {
+      this.textures.remove('shadow_tex')
+    }
     const g = this.add.graphics()
-    g.setDepth(15)
+    const sw = 64
+    const sh = 80
 
-    // Тело тени
-    g.fillStyle(0x000000, 0.85)
-    g.fillRect(-14, -44, 28, 44)  // тело
+    // Внешний туман тени
+    g.fillStyle(0x3B0764, 0.45)
+    g.fillCircle(32, 42, 28)
 
-    // Глаза тени (красные, мигают)
-    g.fillStyle(0xFF2222, 1)
-    g.fillRect(-8, -38, 6, 8)
-    g.fillRect(4, -38, 6, 8)
+    // Тело тени (тёмная фигура)
+    g.fillStyle(0x090114, 0.95)
+    g.fillRoundedRect(16, 20, 32, 44, 8)
 
-    // Когти внизу
-    g.fillStyle(0x110011, 0.9)
-    g.fillRect(-16, 0, 6, 10)
-    g.fillRect(-6, 0, 6, 8)
-    g.fillRect(4, 0, 6, 10)
+    // Голова
+    g.fillStyle(0x05000A, 1)
+    g.fillCircle(32, 22, 15)
 
-    g.generateTexture('shadow_tex', 40, 60)
+    // Капюшон/рога тени
+    g.fillStyle(0x090114, 1)
+    g.fillTriangle(20, 18, 25, 6, 29, 18)
+    g.fillTriangle(35, 18, 39, 6, 44, 18)
+
+    // Яркие горящие красные глаза (с желтыми зрачками — отчётливо видны издалека!)
+    g.fillStyle(0xFF0055, 1)
+    g.fillRect(23, 19, 7, 5)
+    g.fillRect(35, 19, 7, 5)
+    g.fillStyle(0xFFFF55, 1)
+    g.fillRect(25, 20, 3, 3)
+    g.fillRect(37, 20, 3, 3)
+
+    // Когтистые руки, тянущиеся вперёд (вправо, к Малечке)
+    g.fillStyle(0x1F0038, 1)
+    g.fillRect(36, 38, 20, 4) // рука
+    g.fillRect(48, 35, 8, 3)  // верхний коготь
+    g.fillRect(52, 39, 10, 3) // средний коготь
+    g.fillRect(48, 43, 8, 3)  // нижний коготь
+
+    // Шлейф тьмы сзади (слева)
+    g.fillStyle(0x180026, 0.85)
+    g.fillRect(6, 28, 14, 8)
+    g.fillRect(2, 40, 16, 7)
+    g.fillRect(8, 52, 12, 6)
+
+    g.generateTexture('shadow_tex', sw, sh)
     g.destroy()
 
     this._shadow = this.add.image(
       MALECHKA_X + this._shadowDelta,
-      GROUND_Y - 20,
+      GROUND_Y - 24,
       'shadow_tex'
-    ).setDepth(14)
+    ).setDepth(15)
 
-    // Туман вокруг тени
+    // Аура тени
     this._shadowAura = this.add.graphics().setDepth(13)
     this._updateShadowAura()
 
-    // Мигание глаз тени
-    this.time.addEvent({
-      delay: 600,
-      loop: true,
-      callback: () => {
-        if (this._state === 'RUNNING') {
-          this._shadow.setAlpha(this._shadow.alpha > 0.8 ? 0.6 : 1.0)
-        }
-      },
+    // Зловещее дыхание / покачивание тени
+    this.tweens.add({
+      targets: this._shadow,
+      scaleY: 1.06,
+      scaleX: 0.95,
+      duration: 380,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
     })
   }
 
@@ -423,11 +471,14 @@ export default class Level1Scene extends Phaser.Scene {
     if (!this._shadow || !this._shadow.active) return
     const sx = this._shadow.x
     const sy = this._shadow.y
-    // Ореол темноты
-    for (let r = 60; r >= 10; r -= 10) {
-      this._shadowAura.fillStyle(0x000000, 0.06)
-      this._shadowAura.fillCircle(sx, sy - 10, r)
-    }
+
+    // Ореол темноты и фиолетово-красного свечения
+    this._shadowAura.fillStyle(0x7E22CE, 0.22) // фиолетовый туман
+    this._shadowAura.fillCircle(sx, sy - 8, 55)
+    this._shadowAura.fillStyle(0xDC2626, 0.28) // зловещий алый ореол
+    this._shadowAura.fillCircle(sx + 8, sy - 12, 34)
+    this._shadowAura.fillStyle(0x050010, 0.5)  // ядро тьмы
+    this._shadowAura.fillCircle(sx, sy, 22)
   }
 
   // ──────────────────────────────────────────────────────────
@@ -549,6 +600,7 @@ export default class Level1Scene extends Phaser.Scene {
 
     // Запускаем игровую логику
     this._state = 'RUNNING'
+    this._graceTimer = GRACE_MS   // 3 сек неуязвимости
     this._startSpawnTimers()
 
     // Фоновая пульсация «музыки» (процедурная)
@@ -611,21 +663,57 @@ export default class Level1Scene extends Phaser.Scene {
   // ──────────────────────────────────────────────────────────
   _onHitObstacle(malechka, obstacle) {
     if (this._dead || this._state !== 'RUNNING') return
-    this._die()
+    if (this._graceTimer > 0 || this._stumbleTimer > 0) return
+
+    Audio.hit()
+    this.cameras.main.shake(250, 0.015)
+    this.cameras.main.flash(200, 200, 30, 30, false)
+
+    // Тень совершает резкий рывок вперёд!
+    this._shadowDelta += 35
+
+    // Игрок спотыкается и получает кратковременную защиту
+    this._stumbleTimer = 1500
+    this.tweens.add({
+      targets: this._malechka,
+      alpha: 0.4,
+      tint: 0xFF4444,
+      yoyo: true,
+      repeat: 3,
+      duration: 180,
+      onComplete: () => {
+        if (this._malechka && !this._dead) {
+          this._malechka.setAlpha(1)
+          this._malechka.clearTint()
+        }
+      },
+    })
+
+    // Если тень догнала — гибель
+    if (this._shadowDelta >= SHADOW_CATCH) {
+      this._die()
+    }
   }
 
   _onCoin(malechka, coin) {
+    if (coin._shine) coin._shine.destroy()
     coin.destroy()
     this._coins++
     this._hud.addCoins(1)
-    this._hud.coinPopup(coin.x, coin.y)
+    this._hud.coinPopup(malechka.x, malechka.y - 30)
     GSM.addCoins(1)
     Audio.coin()
+
+    // Сбор монет отталкивает тень назад!
+    this._shadowDelta = Math.max(this._shadowDelta - 12, SHADOW_START - 20)
   }
 
   _onBooster(malechka, booster) {
     booster.destroy()
     this._activateBooster()
+
+    // Бустер отталкивает тень далеко назад!
+    this._shadowDelta = Math.max(this._shadowDelta - 45, SHADOW_START - 30)
   }
 
   // ──────────────────────────────────────────────────────────
@@ -661,28 +749,28 @@ export default class Level1Scene extends Phaser.Scene {
   }
 
   // ──────────────────────────────────────────────────────────
-  // СПАВН ПРЕПЯТСТВИЙ И КОЛЛЕКТИБЛОВ
+  // СПАВН ПРЕПЯТСТВИЙ И КОЛЛЕКТИБЛОВ (ДИНАМИЧЕСКИЕ ОБЪЕКТЫ)
   // ──────────────────────────────────────────────────────────
   _startSpawnTimers() {
-    // Препятствия каждые 2-4 секунды
+    // Первое препятствие через 4.5 секунды — игрок успевает сориентироваться
     this._spawnTimer = this.time.addEvent({
-      delay:    Phaser.Math.Between(2000, 3500),
+      delay:    4500,
       loop:     false,
       callback: this._spawnObstacle,
       callbackScope: this,
     })
 
-    // Монеты каждые 3-5 секунд
+    // Монеты каждые 2.5-4 секунды
     this._coinTimer = this.time.addEvent({
-      delay:    Phaser.Math.Between(3000, 5000),
+      delay:    2000,
       loop:     false,
       callback: this._spawnCoin,
       callbackScope: this,
     })
 
-    // Бустеры каждые 8-15 секунд
+    // Бустеры каждые 8-14 секунд
     this._boostSpawnTimer = this.time.addEvent({
-      delay:    Phaser.Math.Between(8000, 15000),
+      delay:    7500,
       loop:     false,
       callback: this._spawnBoosterPickup,
       callbackScope: this,
@@ -693,28 +781,22 @@ export default class Level1Scene extends Phaser.Scene {
     if (this._state !== 'RUNNING') return
 
     const template = Phaser.Utils.Array.GetRandom(OBSTACLES)
-    const y = GROUND_Y - template.h / 2 - template.offsetY
+    const y = GROUND_Y - template.h / 2 - (template.offsetY || 0)
 
     const obs = this.add.rectangle(W + 60, y, template.w, template.h, template.color)
     obs.setDepth(18)
-    this.physics.add.existing(obs, true)
+    this.physics.add.existing(obs) // Динамическое тело
+    obs.body.setAllowGravity(false)
+    obs.body.setImmovable(true)
+    obs.body.setVelocityX(-this._worldSpeed)
+    // Честный щадящий хитбокс
+    obs.body.setSize(template.w * 0.75, template.h * 0.75)
     this._obstacles.add(obs)
-
-    // Движение влево (через tween, не физику — проще)
-    this.tweens.add({
-      targets:  obs,
-      x:        -60,
-      duration: (W + 120) / this._worldSpeed * 1000,
-      ease:     'Linear',
-      onComplete: () => {
-        this._obstacles.remove(obs, true, true)
-      },
-    })
 
     // Переставляем таймер
     if (this._spawnTimer) {
       this._spawnTimer = this.time.addEvent({
-        delay: Phaser.Math.Between(2000, 4000),
+        delay: Phaser.Math.Between(3500, 5500),
         loop: false,
         callback: this._spawnObstacle,
         callbackScope: this,
@@ -725,29 +807,21 @@ export default class Level1Scene extends Phaser.Scene {
   _spawnCoin() {
     if (this._state !== 'RUNNING') return
 
-    const y = GROUND_Y - Phaser.Math.Between(50, 130)
+    const y = GROUND_Y - Phaser.Math.Between(45, 110)
     const coin = this.add.circle(W + 30, y, 10, 0xF1C40F)
     coin.setDepth(17)
     // Блеск монеты
     const shine = this.add.circle(W + 30 - 3, y - 3, 3, 0xFFFFAA)
     shine.setDepth(18)
-    this.physics.add.existing(coin, true)
+    coin._shine = shine
+
+    this.physics.add.existing(coin)
+    coin.body.setAllowGravity(false)
+    coin.body.setVelocityX(-this._worldSpeed)
     this._coins_group.add(coin)
 
-    const dur = (W + 60) / this._worldSpeed * 1000
-    this.tweens.add({
-      targets:  [coin, shine],
-      x:        '-=' + (W + 60),
-      duration: dur,
-      ease:     'Linear',
-      onComplete: () => {
-        this._coins_group.remove(coin, true, true)
-        shine.destroy()
-      },
-    })
-
     this._coinTimer = this.time.addEvent({
-      delay: Phaser.Math.Between(3000, 5000),
+      delay: Phaser.Math.Between(2500, 4500),
       loop: false,
       callback: this._spawnCoin,
       callbackScope: this,
@@ -757,31 +831,23 @@ export default class Level1Scene extends Phaser.Scene {
   _spawnBoosterPickup() {
     if (this._state !== 'RUNNING') return
 
-    const y = GROUND_Y - Phaser.Math.Between(60, 120)
+    const y = GROUND_Y - Phaser.Math.Between(55, 105)
     const g = this.add.graphics()
-    g.fillStyle(0x00FFFF, 0.9)
-    g.fillStar(0, 0, 5, 10, 5)  // звезда
+    g.fillStyle(0x00FFFF, 0.95)
+    g.fillStar(0, 0, 5, 12, 6)  // звезда
     g.setPosition(W + 30, y).setDepth(17)
 
-    this.physics.add.existing(g, true)
+    this.physics.add.existing(g)
+    g.body.setAllowGravity(false)
+    g.body.setVelocityX(-this._worldSpeed)
+    g.body.setSize(24, 24)
     this._boosters.add(g)
 
     // Пульсация
-    this.tweens.add({ targets: g, scaleX: 1.3, scaleY: 1.3, duration: 400, yoyo: true, repeat: -1 })
-
-    const dur = (W + 60) / this._worldSpeed * 1000
-    this.tweens.add({
-      targets:  g,
-      x:        -30,
-      duration: dur,
-      ease:     'Linear',
-      onComplete: () => {
-        this._boosters.remove(g, true, true)
-      },
-    })
+    this.tweens.add({ targets: g, scaleX: 1.25, scaleY: 1.25, duration: 400, yoyo: true, repeat: -1 })
 
     this._boostSpawnTimer = this.time.addEvent({
-      delay: Phaser.Math.Between(8000, 15000),
+      delay: Phaser.Math.Between(8000, 14000),
       loop: false,
       callback: this._spawnBoosterPickup,
       callbackScope: this,
@@ -792,17 +858,17 @@ export default class Level1Scene extends Phaser.Scene {
   // ПОДСКАЗКИ
   // ──────────────────────────────────────────────────────────
   _showHint(text) {
-    const hint = this.add.text(W / 2, H - 30, text, {
+    const hint = this.add.text(W / 2, 75, text, {
       fontFamily: 'VT323',
-      fontSize:   '20px',
-      color:      '#D7BDE2',
+      fontSize:   '26px',
+      color:      '#FFE082',
       stroke:     '#000000',
-      strokeThickness: 3,
-    }).setOrigin(0.5).setDepth(150).setAlpha(0)
+      strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(200).setAlpha(0)
 
     this.tweens.add({ targets: hint, alpha: 1, duration: 400 })
-    this.time.delayedCall(3000, () => {
-      this.tweens.add({ targets: hint, alpha: 0, duration: 500,
+    this.time.delayedCall(3800, () => {
+      this.tweens.add({ targets: hint, alpha: 0, duration: 600,
         onComplete: () => hint.destroy() })
     })
   }
@@ -1027,8 +1093,28 @@ export default class Level1Scene extends Phaser.Scene {
       }
     }
 
-    // ── Прыжок (клавиатура / джойстик вверх) ─────────────
+    // ── Препятствия и предметы: движение и очистка ────────
+    this._obstacles.getChildren().forEach((obs) => {
+      obs.body.setVelocityX(-currentSpeed)
+      if (obs.x < -80) obs.destroy()
+    })
+    this._coins_group.getChildren().forEach((coin) => {
+      coin.body.setVelocityX(-currentSpeed)
+      if (coin._shine) coin._shine.setPosition(coin.x - 3, coin.y - 3)
+      if (coin.x < -40) {
+        if (coin._shine) coin._shine.destroy()
+        coin.destroy()
+      }
+    })
+    this._boosters.getChildren().forEach((b) => {
+      b.body.setVelocityX(-currentSpeed)
+      if (b.x < -40) b.destroy()
+    })
+
+    // ── Прыжок (клавиатура Пробел / Вверх / W / джойстик вверх) ──
     const jumpNow = Phaser.Input.Keyboard.JustDown(this._spaceKey)
+      || Phaser.Input.Keyboard.JustDown(this._upKey)
+      || Phaser.Input.Keyboard.JustDown(this._wKey)
       || (this._joystick.up && !this._lastJoyUp)
     this._lastJoyUp = this._joystick.up
 
@@ -1038,13 +1124,21 @@ export default class Level1Scene extends Phaser.Scene {
     const runCycle = Math.sin(time * 0.012) * 5
     this._malechka.setAngle(runCycle)
 
+    // ── Период неуязвимости (grace & stumble) ──────────────
+    if (this._graceTimer > 0) {
+      this._graceTimer -= delta
+    }
+    if (this._stumbleTimer > 0) {
+      this._stumbleTimer -= delta
+    }
+
     // ── Тень ─────────────────────────────────────────────
-    // Тень чуть быстрее мира → δ растёт
-    const shadowGain = (currentSpeed * 0.08 + 5) * dt
+    // Тень плавно сокращает дистанцию
+    const shadowGain = (currentSpeed * 0.015 + 1.2) * dt
     this._shadowDelta = Math.min(this._shadowDelta + shadowGain, SHADOW_CATCH)
 
     const sx = MALECHKA_X + this._shadowDelta
-    this._shadow.setPosition(sx, GROUND_Y - 20)
+    this._shadow.setPosition(sx, GROUND_Y - 24)
     this._updateShadowAura()
 
     // Предупреждение
@@ -1053,8 +1147,8 @@ export default class Level1Scene extends Phaser.Scene {
     if (danger && !this._lastDanger) Audio.danger()
     this._lastDanger = danger
 
-    // Тень поймала! → смерть
-    if (this._shadowDelta >= SHADOW_CATCH - 2) {
+    // Тень поймала! → смерть (только после grace-периода)
+    if (this._shadowDelta >= SHADOW_CATCH && this._graceTimer <= 0) {
       this._die()
       return
     }
