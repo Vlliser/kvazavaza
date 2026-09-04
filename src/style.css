@@ -87,14 +87,13 @@ canvas {
   to   { transform: rotate(0deg); }
 }
 
-/* Показываем оверлей только при portrait ориентации */
-@media (orientation: portrait) {
-  #rotate-overlay {
-    display: flex;
-  }
-  #game-container {
-    display: none;
-  }
+/* Оверлей управляется через JavaScript (см. index.html)
+   По умолчанию всегда скрыт */
+#rotate-overlay {
+  display: none !important;
+}
+#rotate-overlay.show {
+  display: flex !important;
 }
 
 /* -------------------------------------------------------

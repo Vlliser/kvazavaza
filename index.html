@@ -58,15 +58,62 @@
   </head>
 
   <body>
-    <!-- Оверлей «Поверни телефон» — показывается в portrait режиме -->
+    <!-- Оверлей «Поверни телефон» — только для мобильных в portrait -->
     <div id="rotate-overlay">
       <div class="rotate-icon">📱</div>
       <p>Поверни телефон горизонтально</p>
       <p class="rotate-sub">Игра работает в режиме landscape</p>
+      <button id="rotate-dismiss" style="
+        margin-top: 20px;
+        padding: 10px 20px;
+        background: #4A0E8F;
+        color: white;
+        border: 2px solid #9B59B6;
+        font-family: 'Press Start 2P', monospace;
+        font-size: 8px;
+        cursor: pointer;
+        border-radius: 4px;
+      ">Играть всё равно</button>
     </div>
 
     <!-- Контейнер для Phaser canvas -->
     <div id="game-container"></div>
+
+    <!-- Умный обработчик ориентации -->
+    <script>
+      const overlay    = document.getElementById('rotate-overlay')
+      const gameDiv    = document.getElementById('game-container')
+      const dismissBtn = document.getElementById('rotate-dismiss')
+
+      // Проверяем — это реально мобильный телефон?
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+
+      function checkOrientation() {
+        const isPortrait = window.innerHeight > window.innerWidth
+        if (isMobile && isPortrait) {
+          overlay.classList.add('show')
+          gameDiv.style.display = 'none'
+        } else {
+          overlay.classList.remove('show')
+          gameDiv.style.display = 'flex'
+        }
+      }
+
+      // Кнопка «Играть всё равно» — принудительно скрываем оверлей
+      dismissBtn.addEventListener('click', () => {
+        overlay.classList.remove('show')
+        overlay.style.display = 'none'
+        gameDiv.style.display = 'flex'
+      })
+
+      // Слушаем поворот экрана
+      window.addEventListener('resize',            checkOrientation)
+      window.addEventListener('orientationchange', checkOrientation)
+
+      // Первичная проверка (с задержкой — браузер может не успеть)
+      checkOrientation()
+      setTimeout(checkOrientation, 200)
+    </script>
 
     <!-- Точка входа JavaScript -->
     <script type="module" src="/src/main.js"></script>
