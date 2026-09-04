@@ -10,6 +10,7 @@
 
 import { hasSavedGame } from '../supabase.js'
 import DIALOGUES from '../dialogues.js'
+import { GSM }   from '../GameStateManager.js'
 
 class BootScene extends Phaser.Scene {
   constructor() {
@@ -52,14 +53,15 @@ class BootScene extends Phaser.Scene {
     // Ждём загрузки шрифтов
     await this.waitForFonts()
 
+    // Инициализируем менеджер состояния (читает localStorage + Supabase)
+    await GSM.init()
+
     // Проверяем: есть ли сохранённая игра?
     const savedGame = hasSavedGame()
 
     // Плавный fade-out и переход
     this.cameras.main.fade(500, 0, 0, 0)
     this.time.delayedCall(500, () => {
-      // Если сохранение есть — показываем интро всё равно
-      // (главное меню предложит "Продолжить")
       this.scene.start('IntroScene', { hasSave: savedGame })
     })
   }

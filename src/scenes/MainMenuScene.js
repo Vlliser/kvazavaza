@@ -11,8 +11,10 @@
 // - Определение: показывать ли "Продолжить"
 // ============================================================
 
-import DIALOGUES from '../dialogues.js'
+import { DIALOGUES } from '../dialogues.js'
 import { hasSavedGame, loadGameState, DEFAULT_GAME_STATE, saveGameState } from '../supabase.js'
+import { GSM } from '../GameStateManager.js'
+import { Audio } from '../audio/AudioManager.js'
 
 // ── Цветовая палитра (тёмная фиолетовая тема)
 const COLORS = {
@@ -329,7 +331,7 @@ class MainMenuScene extends Phaser.Scene {
   // ────────────────────────────────────────────
   createVersion() {
     this.add
-      .text(10, this.H - 16, 'v0.1.0 • БЛОК 1', {
+      .text(10, this.H - 16, 'v0.2.0 • БЛОК 2', {
         fontFamily: 'VT323',
         fontSize:   '16px',
         color:      '#6a4f8c',
@@ -341,10 +343,8 @@ class MainMenuScene extends Phaser.Scene {
   // ДЕЙСТВИЯ КНОПОК
   // ────────────────────────────────────────────
   async onContinue() {
-    // TODO Блок 2: переход на Карту уровней
-    const state = await loadGameState()
-    console.log('[MainMenu] Продолжить. Сохранение:', state)
-    this.fadeToScene('LevelMapScene') // создадим в Блоке 2
+    Audio.uiClick()
+    this.fadeToScene('LevelMapScene')
   }
 
   onNewGame() {
@@ -357,8 +357,8 @@ class MainMenuScene extends Phaser.Scene {
   }
 
   async startNewGame() {
-    await saveGameState({ ...DEFAULT_GAME_STATE })
-    this.fadeToScene('Level1Scene') // создадим в Блоке 3
+    await GSM.reset()
+    this.fadeToScene('Level1Scene')
   }
 
   showConfirmNewGame() {
@@ -406,8 +406,8 @@ class MainMenuScene extends Phaser.Scene {
   }
 
   onSettings() {
-    // TODO Блок 2: экран настроек
-    console.log('[MainMenu] Настройки — Блок 2')
+    Audio.uiClick()
+    this.scene.start('SettingsScene', { from: 'MainMenuScene' })
   }
 
   // ────────────────────────────────────────────

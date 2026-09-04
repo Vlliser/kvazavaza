@@ -1,70 +1,69 @@
 // ============================================================
 // main.js — Точка входа: инициализация Phaser
+// БЛОК 2: Landscape 854×480, все сцены подключены
 // ============================================================
 
 import Phaser from 'phaser'
 
-// Сцены (порядок = порядок запуска)
-import BootScene     from './scenes/BootScene.js'
-import IntroScene    from './scenes/IntroScene.js'
-import MainMenuScene from './scenes/MainMenuScene.js'
+// Сцены
+import BootScene      from './scenes/BootScene.js'
+import IntroScene     from './scenes/IntroScene.js'
+import MainMenuScene  from './scenes/MainMenuScene.js'
+import LevelMapScene  from './scenes/LevelMapScene.js'
+import DeathScene     from './scenes/DeathScene.js'
+import SettingsScene  from './scenes/SettingsScene.js'
+import Level1Scene    from './scenes/Level1Scene.js'
 
 // ────────────────────────────────────────────────────────────
 // КОНФИГУРАЦИЯ PHASER
+// Landscape: 854×480 (соотношение 16:9 горизонтально)
 // ────────────────────────────────────────────────────────────
 const config = {
-  type: Phaser.AUTO, // Автовыбор: WebGL (быстро) или Canvas (фолбэк)
+  type: Phaser.AUTO,
 
-  // Базовое разрешение 9:16 для мобильного портрета
-  width:  480,
-  height: 854,
+  // LANDSCAPE: ширина > высоты (как PSP/Nintendo DS)
+  width:  854,
+  height: 480,
 
-  // Цвет фона (видно только в letterbox-полосах)
   backgroundColor: '#1A0A2E',
 
-  // ── Pixel Art настройки
-  pixelArt:    true,  // Отключает сглаживание спрайтов
-  roundPixels: true,  // Позиции объектов — только целые числа
+  // Pixel Art — без размытия
+  pixelArt:    true,
+  roundPixels: true,
 
-  // ── Масштабирование под экран
+  // Масштабирование
   scale: {
-    mode:       Phaser.Scale.FIT,          // Вписать с сохранением пропорций
-    autoCenter: Phaser.Scale.CENTER_BOTH,  // По центру
-    parent:     'game-container',          // В наш div
+    mode:       Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    parent:     'game-container',
   },
 
-  // ── Мобильный ввод
+  // Ввод
   input: {
-    touch: true,   // Тач-события
-    mouse: true,   // Мышь (для разработки на ПК)
+    touch: true,
+    mouse: true,
   },
 
-  // ── Физика (будет нужна с Блока 3)
+  // Физика Arcade — для платформера
   physics: {
     default: 'arcade',
     arcade: {
-      gravity: { y: 800 },
-      debug: false, // Включи true, чтобы видеть хитбоксы при отладке
+      gravity: { y: 900 },
+      debug: false, // включи true для отладки хитбоксов
     },
   },
 
-  // ── Порядок сцен
-  // Первая сцена в массиве запускается автоматически
+  // Порядок сцен (первая запускается автоматически)
   scene: [
-    BootScene,      // Блок 1: регистрация SW, загрузка шрифтов
-    IntroScene,     // Блок 1: заставка Marvel-style
-    MainMenuScene,  // Блок 1: главное меню (заглушка)
-
-    // Блок 2: LevelMapScene, SettingsScene, DeathScene
-    // Блок 3: Level1Scene, Level2Scene
-    // Блок 4: Level3Scene, Level4Scene
-    // Блок 5: Level5Scene, CreditsScene
-    // Блок 6: BonusShopScene
+    BootScene,      // Блок 1: SW + шрифты
+    IntroScene,     // Блок 1: заставка
+    MainMenuScene,  // Блок 1: главное меню
+    LevelMapScene,  // Блок 2: карта уровней
+    DeathScene,     // Блок 2: экран смерти
+    SettingsScene,  // Блок 2: настройки
+    Level1Scene,    // Блок 2: уровень 1 — «Холодно зимой одной»
   ],
 }
 
-// Запускаем игру!
 const game = new Phaser.Game(config)
-
-// Экспортируем для возможного доступа из других модулей
 export default game

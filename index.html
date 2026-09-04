@@ -13,6 +13,13 @@
     />
 
     <!-- ======================================================
+         LANDSCAPE ORIENTATION LOCK
+    ====================================================== -->
+    <meta name="screen-orientation" content="landscape" />
+    <meta name="x5-orientation" content="landscape" />
+    <meta name="full-screen" content="yes" />
+
+    <!-- ======================================================
          PWA — ANDROID (Chrome)
          display:standalone убирает адресную строку!
     ====================================================== -->
@@ -51,6 +58,13 @@
   </head>
 
   <body>
+    <!-- Оверлей «Поверни телефон» — показывается в portrait режиме -->
+    <div id="rotate-overlay">
+      <div class="rotate-icon">📱</div>
+      <p>Поверни телефон горизонтально</p>
+      <p class="rotate-sub">Игра работает в режиме landscape</p>
+    </div>
+
     <!-- Контейнер для Phaser canvas -->
     <div id="game-container"></div>
 
