@@ -128,25 +128,31 @@ export default class Level1Scene extends Phaser.Scene {
     this._upKey    = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP)
     this._wKey     = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W)
 
-    // Тап в любую точку экрана для прыжка
-    // ВАЖНО: только когда RUNNING и не в зоне управления (левый джойстик / правые кнопки)
+    // Тап в экран для прыжка:
+    // Работает в любом месте экрана, кроме виртуального джойстика (слева внизу)
+    // и кроме кнопки бустера (если игрок нажал именно на бустер)
     this.input.on('pointerdown', (pointer) => {
       if (this._state !== 'RUNNING') return  // блокируем во время INTRO / CUTSCENE / диалогов!
-      // Исключаем левый нижний (джойстик) и правый нижний (кнопки)
-      const inJoystick = pointer.x < 160 && pointer.y > H - 200
-      const inButtons  = pointer.x > W - 200 && pointer.y > H - 200
-      if (inJoystick || inButtons) return
+
+      // Исключаем только зону левого виртуального джойстика
+      const inJoystick = pointer.x < 170 && pointer.y > H - 180
+      if (inJoystick) return
+
+      // Исключаем только конкретную кнопку бустера (▲ слева от центра кнопок: CX - 38, CY)
+      const boosterX = W - 90 - 38
+      const boosterY = H - 80
+      if (Math.hypot(pointer.x - boosterX, pointer.y - boosterY) < 32) return
+
       this._jump()
     })
 
-    // Свайп вверх тоже делает прыжок (но только в игровой зоне)
+    // Свайп вверх тоже делает прыжок
     this.input.on('pointerup', (pointer) => {
       if (this._state !== 'RUNNING') return
-      const inJoystick = pointer.x < 160 && pointer.y > H - 200
-      const inButtons  = pointer.x > W - 200 && pointer.y > H - 200
-      if (inJoystick || inButtons) return
+      const inJoystick = pointer.x < 170 && pointer.y > H - 180
+      if (inJoystick) return
       const dy = pointer.upY - pointer.downY
-      if (dy < -35) {
+      if (dy < -30) {
         this._jump()
       }
     })
@@ -619,7 +625,14 @@ export default class Level1Scene extends Phaser.Scene {
   // ──────────────────────────────────────────────────────────
   _jump() {
     if (this._state !== 'RUNNING') return
-    if (!this._onGround) return
+
+    // Надёжная многофакторная проверка нахождения на земле
+    const body = this._malechka?.body
+    const onGround = this._onGround ||
+      (body && (body.blocked.down || body.touching.down)) ||
+      (this._malechka && this._malechka.y >= GROUND_Y - 28 && (!body || body.velocity.y >= -40))
+
+    if (!onGround) return
 
     this._malechka.setVelocityY(JUMP_VEL)
     this._onGround = false
@@ -1125,6 +1138,17 @@ export default class Level1Scene extends Phaser.Scene {
 
     // ── Объекты движутся через tween (body.reset в onUpdate) — ничего лишнего здесь! ──
 
+
+    // ── Проверка нахождения на земле / сброс флага прыжка ──
+    if (this._malechka?.body) {
+      const b = this._malechka.body
+      if (b.blocked.down || b.touching.down || (this._malechka.y >= GROUND_Y - 26 && b.velocity.y >= 0)) {
+        if (!this._onGround) {
+          this._onGround = true
+          Audio.land()
+        }
+      }
+    }
 
     // ── Прыжок (клавиатура / джойстик вверх) ────────────────
     const jumpNow = Phaser.Input.Keyboard.JustDown(this._spaceKey)

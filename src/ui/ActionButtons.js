@@ -86,7 +86,7 @@ export class ActionButtons {
     for (const btn of this._buttons) {
       const dx = pointer.x - btn.x
       const dy = pointer.y - btn.y
-      if (Math.sqrt(dx * dx + dy * dy) <= this._btnRadius + 12) {
+      if (Math.sqrt(dx * dx + dy * dy) <= this._btnRadius + 18) {
         this._activeTouches.set(pointer.id, btn.id)
         btn.pressed = true
         this._drawButton(btn._g, btn, true)
