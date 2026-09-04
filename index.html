@@ -81,38 +81,34 @@
 
     <!-- Умный обработчик ориентации -->
     <script>
-      const overlay    = document.getElementById('rotate-overlay')
-      const gameDiv    = document.getElementById('game-container')
-      const dismissBtn = document.getElementById('rotate-dismiss')
-
-      // Проверяем — это реально мобильный телефон?
-      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-
-      function checkOrientation() {
-        const isPortrait = window.innerHeight > window.innerWidth
-        if (isMobile && isPortrait) {
-          overlay.classList.add('show')
-          gameDiv.style.display = 'none'
-        } else {
-          overlay.classList.remove('show')
-          gameDiv.style.display = 'flex'
+      // ── Метод 1: screen.orientation.lock (самый надёжный для PWA) ──
+      function lockLandscape() {
+        if (screen.orientation && screen.orientation.lock) {
+          screen.orientation.lock('landscape').catch(() => {
+            // Тихо игнорируем — CSS-поворот уже справляется
+          })
         }
       }
 
-      // Кнопка «Играть всё равно» — принудительно скрываем оверлей
-      dismissBtn.addEventListener('click', () => {
-        overlay.classList.remove('show')
-        overlay.style.display = 'none'
-        gameDiv.style.display = 'flex'
-      })
+      // Блокируем сразу при загрузке
+      lockLandscape()
 
-      // Слушаем поворот экрана
-      window.addEventListener('resize',            checkOrientation)
-      window.addEventListener('orientationchange', checkOrientation)
+      // Повторяем при первом тапе (браузер требует жест)
+      document.addEventListener('touchstart', lockLandscape, { once: true })
+      document.addEventListener('click',      lockLandscape, { once: true })
 
-      // Первичная проверка (с задержкой — браузер может не успеть)
-      checkOrientation()
-      setTimeout(checkOrientation, 200)
+      // При переходе в полноэкранный режим
+      document.addEventListener('fullscreenchange', lockLandscape)
+
+      // ── Метод 2: Кнопка «Играть всё равно» (аварийный выход) ──
+      const dismissBtn = document.getElementById('rotate-dismiss')
+      if (dismissBtn) {
+        dismissBtn.addEventListener('click', () => {
+          document.getElementById('rotate-overlay').style.display = 'none'
+          document.getElementById('game-container').style.display = 'flex'
+          lockLandscape()
+        })
+      }
     </script>
 
     <!-- Точка входа JavaScript -->

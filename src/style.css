@@ -87,13 +87,28 @@ canvas {
   to   { transform: rotate(0deg); }
 }
 
-/* Оверлей управляется через JavaScript (см. index.html)
-   По умолчанию всегда скрыт */
-#rotate-overlay {
-  display: none !important;
-}
-#rotate-overlay.show {
-  display: flex !important;
+/* ==========================================================
+   LANDSCAPE LOCK — CSS фолбэк:
+   Если screen.orientation.lock() не сработал —
+   поворачиваем body на 90° в portrait-режиме.
+   Это работает на всех Android/iOS.
+========================================================== */
+@media screen and (orientation: portrait) {
+  html {
+    /* Поворачиваем всё на 90° по часовой стрелке */
+    transform: rotate(90deg);
+    transform-origin: bottom left;
+    width: 100vh;       /* ширина = высота экрана */
+    height: 100vw;      /* высота = ширина экрана */
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    overflow: hidden;
+  }
+  /* Скрываем оверлей — CSS-поворот уже решает проблему */
+  #rotate-overlay {
+    display: none !important;
+  }
 }
 
 /* -------------------------------------------------------
