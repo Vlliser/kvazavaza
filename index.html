@@ -58,22 +58,12 @@
   </head>
 
   <body>
-    <!-- Оверлей «Поверни телефон» — только для мобильных в portrait -->
+    <!-- Оверлей «Поверни телефон» — только для мобильных устройств в портретном режиме -->
     <div id="rotate-overlay">
       <div class="rotate-icon">📱</div>
       <p>Поверни телефон горизонтально</p>
-      <p class="rotate-sub">Игра работает в режиме landscape</p>
-      <button id="rotate-dismiss" style="
-        margin-top: 20px;
-        padding: 10px 20px;
-        background: #4A0E8F;
-        color: white;
-        border: 2px solid #9B59B6;
-        font-family: 'Press Start 2P', monospace;
-        font-size: 8px;
-        cursor: pointer;
-        border-radius: 4px;
-      ">Играть всё равно</button>
+      <p class="rotate-sub">Игра работает лучше всего в режиме Landscape</p>
+      <button id="rotate-dismiss" class="rotate-btn">Играть всё равно ▶</button>
     </div>
 
     <!-- Контейнер для Phaser canvas -->
@@ -81,34 +71,63 @@
 
     <!-- Умный обработчик ориентации -->
     <script>
-      // ── Метод 1: screen.orientation.lock (самый надёжный для PWA) ──
-      function lockLandscape() {
-        if (screen.orientation && screen.orientation.lock) {
-          screen.orientation.lock('landscape').catch(() => {
-            // Тихо игнорируем — CSS-поворот уже справляется
-          })
+      (function () {
+        const overlay = document.getElementById('rotate-overlay');
+        const dismissBtn = document.getElementById('rotate-dismiss');
+        let dismissed = sessionStorage.getItem('rotateDismissed') === '1';
+
+        function isMobileDevice() {
+          return (
+            /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+            (navigator.maxTouchPoints > 1 && window.innerWidth < 1024)
+          );
         }
-      }
 
-      // Блокируем сразу при загрузке
-      lockLandscape()
+        function checkOrientation() {
+          if (dismissed) {
+            overlay.style.display = 'none';
+            return;
+          }
+          const isPortrait = window.innerHeight > window.innerWidth;
+          if (isMobileDevice() && isPortrait) {
+            overlay.style.display = 'flex';
+          } else {
+            overlay.style.display = 'none';
+          }
+        }
 
-      // Повторяем при первом тапе (браузер требует жест)
-      document.addEventListener('touchstart', lockLandscape, { once: true })
-      document.addEventListener('click',      lockLandscape, { once: true })
+        function tryLockLandscape() {
+          if (screen.orientation && screen.orientation.lock) {
+            screen.orientation.lock('landscape').catch(function () {});
+          }
+        }
 
-      // При переходе в полноэкранный режим
-      document.addEventListener('fullscreenchange', lockLandscape)
+        if (dismissBtn) {
+          function onDismiss(e) {
+            e.stopPropagation();
+            dismissed = true;
+            sessionStorage.setItem('rotateDismissed', '1');
+            overlay.style.display = 'none';
+            tryLockLandscape();
+          }
+          dismissBtn.addEventListener('click', onDismiss);
+          dismissBtn.addEventListener('touchend', onDismiss);
+        }
 
-      // ── Метод 2: Кнопка «Играть всё равно» (аварийный выход) ──
-      const dismissBtn = document.getElementById('rotate-dismiss')
-      if (dismissBtn) {
-        dismissBtn.addEventListener('click', () => {
-          document.getElementById('rotate-overlay').style.display = 'none'
-          document.getElementById('game-container').style.display = 'flex'
-          lockLandscape()
-        })
-      }
+        window.addEventListener('resize', checkOrientation);
+        window.addEventListener('orientationchange', function () {
+          setTimeout(checkOrientation, 150);
+        });
+        if (screen.orientation && screen.orientation.addEventListener) {
+          screen.orientation.addEventListener('change', checkOrientation);
+        }
+
+        document.addEventListener('touchstart', tryLockLandscape, { once: true, passive: true });
+        document.addEventListener('click', tryLockLandscape, { once: true });
+        document.addEventListener('fullscreenchange', tryLockLandscape);
+
+        checkOrientation();
+      })();
     </script>
 
     <!-- Точка входа JavaScript -->

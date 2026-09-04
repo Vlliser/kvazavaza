@@ -51,10 +51,10 @@ canvas {
 
 /* -------------------------------------------------------
    ОВЕРЛЕЙ «ПОВЕРНИ ТЕЛЕФОН»
-   Показывается если телефон держат вертикально
+   Показывается только если мобильное устройство держат вертикально
 ------------------------------------------------------- */
 #rotate-overlay {
-  display: none; /* скрыт по умолчанию */
+  display: none;
   position: fixed;
   inset: 0;
   z-index: 9999;
@@ -64,7 +64,7 @@ canvas {
   justify-content: center;
   color: #ffffff;
   font-family: 'Press Start 2P', monospace;
-  font-size: 14px;
+  font-size: 13px;
   text-align: center;
   gap: 16px;
   padding: 24px;
@@ -72,7 +72,7 @@ canvas {
 }
 
 .rotate-icon {
-  font-size: 64px;
+  font-size: 54px;
   animation: rotate-hint 1.5s ease-in-out infinite alternate;
 }
 
@@ -82,33 +82,28 @@ canvas {
   color: #9B59B6;
 }
 
+.rotate-btn {
+  margin-top: 12px;
+  padding: 12px 24px;
+  background: #4A0E8F;
+  color: #ffffff;
+  border: 2px solid #9B59B6;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  cursor: pointer;
+  border-radius: 6px;
+  touch-action: manipulation;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.rotate-btn:hover, .rotate-btn:active {
+  transform: scale(0.97);
+  background: #6A1EB0;
+}
+
 @keyframes rotate-hint {
   from { transform: rotate(-90deg); }
   to   { transform: rotate(0deg); }
-}
-
-/* ==========================================================
-   LANDSCAPE LOCK — CSS фолбэк:
-   Если screen.orientation.lock() не сработал —
-   поворачиваем body на 90° в portrait-режиме.
-   Это работает на всех Android/iOS.
-========================================================== */
-@media screen and (orientation: portrait) {
-  html {
-    /* Поворачиваем всё на 90° по часовой стрелке */
-    transform: rotate(90deg);
-    transform-origin: bottom left;
-    width: 100vh;       /* ширина = высота экрана */
-    height: 100vw;      /* высота = ширина экрана */
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    overflow: hidden;
-  }
-  /* Скрываем оверлей — CSS-поворот уже решает проблему */
-  #rotate-overlay {
-    display: none !important;
-  }
 }
 
 /* -------------------------------------------------------
