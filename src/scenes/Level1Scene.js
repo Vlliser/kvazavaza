@@ -95,10 +95,10 @@ export default class Level1Scene extends Phaser.Scene {
     // ── Тень ─────────────────────────────────────────────
     this._createShadow()
 
-    // ── Препятствия и предметы (ДИНАМИЧЕСКИЕ группы) ─────
-    this._obstacles   = this.physics.add.group()
-    this._coins_group = this.physics.add.group()
-    this._boosters    = this.physics.add.group()
+    // ── Препятствия/предметы — СТАТИЧЕСКИЕ группы (стабильная работа)!
+    this._obstacles   = this.physics.add.staticGroup()
+    this._coins_group = this.physics.add.staticGroup()
+    this._boosters    = this.physics.add.staticGroup()
 
     // Коллизии
     this.physics.add.collider(this._malechka, this._ground,
@@ -673,23 +673,24 @@ export default class Level1Scene extends Phaser.Scene {
     if (this._graceTimer > 0 || this._stumbleTimer > 0) return
 
     Audio.hit()
-    this.cameras.main.shake(250, 0.015)
-    this.cameras.main.flash(200, 200, 30, 30, false)
+    this.cameras.main.shake(220, 0.014)
 
-    // Тень совершает резкий рывок вперёд!
-    this._shadowDelta += 35
+    // Тень совершает рывок вперёд!
+    this._shadowDelta += 38
 
-    // Игрок спотыкается и получает кратковременную защиту
-    this._stumbleTimer = 1500
+    // Мигание: тинт ЧЕРЕЗ setTint() — НЕ через tween (tint нельзя тинговать!)
+    this._stumbleTimer = 1400
+    this._malechka.setTint(0xFF4444)
+
+    // Мигание через alpha tween
     this.tweens.add({
-      targets: this._malechka,
-      alpha: 0.4,
-      tint: 0xFF4444,
-      yoyo: true,
-      repeat: 3,
-      duration: 180,
+      targets:  this._malechka,
+      alpha:    0.35,
+      duration: 160,
+      yoyo:     true,
+      repeat:   4,
       onComplete: () => {
-        if (this._malechka && !this._dead) {
+        if (this._malechka?.active && !this._dead) {
           this._malechka.setAlpha(1)
           this._malechka.clearTint()
         }
@@ -792,15 +793,20 @@ export default class Level1Scene extends Phaser.Scene {
 
     const obs = this.add.rectangle(W + 60, y, template.w, template.h, template.color)
     obs.setDepth(18)
-    this.physics.add.existing(obs) // Динамическое тело
-    obs.body.setAllowGravity(false)
-    obs.body.setImmovable(true)
-    obs.body.setVelocityX(-this._worldSpeed)
-    // Честный щадящий хитбокс
-    obs.body.setSize(template.w * 0.75, template.h * 0.75)
+    this.physics.add.existing(obs, true)  // static body — стабильно!
+    obs.body.setSize(Math.floor(template.w * 0.72), Math.floor(template.h * 0.72))
     this._obstacles.add(obs)
 
-    // Переставляем таймер
+    // Tween движет объект, onUpdate синхронизирует статик-тело
+    this.tweens.add({
+      targets:  obs,
+      x:        -70,
+      duration: (W + 130) / this._worldSpeed * 1000,
+      ease:     'Linear',
+      onUpdate:   () => { if (obs.body) obs.body.reset(obs.x, obs.y) },
+      onComplete: () => { if (obs.active) this._obstacles.remove(obs, true, true) },
+    })
+
     if (this._spawnTimer) {
       this._spawnTimer = this.time.addEvent({
         delay: Phaser.Math.Between(3500, 5500),
@@ -817,15 +823,25 @@ export default class Level1Scene extends Phaser.Scene {
     const y = GROUND_Y - Phaser.Math.Between(45, 110)
     const coin = this.add.circle(W + 30, y, 10, 0xF1C40F)
     coin.setDepth(17)
-    // Блеск монеты
-    const shine = this.add.circle(W + 30 - 3, y - 3, 3, 0xFFFFAA)
+    const shine = this.add.circle(W + 27, y - 3, 3, 0xFFFFAA)
     shine.setDepth(18)
     coin._shine = shine
 
-    this.physics.add.existing(coin)
-    coin.body.setAllowGravity(false)
-    coin.body.setVelocityX(-this._worldSpeed)
+    this.physics.add.existing(coin, true)  // static body
     this._coins_group.add(coin)
+
+    const dur = (W + 60) / this._worldSpeed * 1000
+    this.tweens.add({
+      targets:  [coin, shine],
+      x:        '-=' + (W + 60),
+      duration: dur,
+      ease:     'Linear',
+      onUpdate: () => { if (coin.body) coin.body.reset(coin.x, coin.y) },
+      onComplete: () => {
+        if (coin.active)  this._coins_group.remove(coin, true, true)
+        if (shine.active) shine.destroy()
+      },
+    })
 
     this._coinTimer = this.time.addEvent({
       delay: Phaser.Math.Between(2500, 4500),
@@ -841,17 +857,24 @@ export default class Level1Scene extends Phaser.Scene {
     const y = GROUND_Y - Phaser.Math.Between(55, 105)
     const g = this.add.graphics()
     g.fillStyle(0x00FFFF, 0.95)
-    g.fillStar(0, 0, 5, 12, 6)  // звезда
+    g.fillStar(0, 0, 5, 12, 6)
     g.setPosition(W + 30, y).setDepth(17)
 
-    this.physics.add.existing(g)
-    g.body.setAllowGravity(false)
-    g.body.setVelocityX(-this._worldSpeed)
+    this.physics.add.existing(g, true)  // static body
     g.body.setSize(24, 24)
     this._boosters.add(g)
 
-    // Пульсация
-    this.tweens.add({ targets: g, scaleX: 1.25, scaleY: 1.25, duration: 400, yoyo: true, repeat: -1 })
+    this.tweens.add({ targets: g, scaleX: 1.3, scaleY: 1.3, duration: 400, yoyo: true, repeat: -1 })
+
+    const dur = (W + 70) / this._worldSpeed * 1000
+    this.tweens.add({
+      targets:  g,
+      x:        -40,
+      duration: dur,
+      ease:     'Linear',
+      onUpdate: () => { if (g.body) g.body.reset(g.x, g.y) },
+      onComplete: () => { if (g.active) this._boosters.remove(g, true, true) },
+    })
 
     this._boostSpawnTimer = this.time.addEvent({
       delay: Phaser.Math.Between(8000, 14000),
@@ -1100,32 +1123,10 @@ export default class Level1Scene extends Phaser.Scene {
       }
     }
 
-    // ── Препятствия и предметы: движение и очистка ────────
-    // Используем slice() чтобы не мутировать массив во время итерации!
-    const obstacles = this._obstacles.getChildren().slice()
-    for (const obs of obstacles) {
-      if (!obs.active) continue
-      obs.body.setVelocityX(-currentSpeed)
-      if (obs.x < -80) obs.destroy()
-    }
-    const coins = this._coins_group.getChildren().slice()
-    for (const coin of coins) {
-      if (!coin.active) continue
-      coin.body.setVelocityX(-currentSpeed)
-      if (coin._shine && coin._shine.active) coin._shine.setPosition(coin.x - 3, coin.y - 3)
-      if (coin.x < -40) {
-        if (coin._shine && coin._shine.active) coin._shine.destroy()
-        coin.destroy()
-      }
-    }
-    const boosters = this._boosters.getChildren().slice()
-    for (const b of boosters) {
-      if (!b.active) continue
-      b.body.setVelocityX(-currentSpeed)
-      if (b.x < -40) b.destroy()
-    }
+    // ── Объекты движутся через tween (body.reset в onUpdate) — ничего лишнего здесь! ──
 
-    // ── Прыжок (клавиатура Пробел / Вверх / W / джойстик вверх) ──
+
+    // ── Прыжок (клавиатура / джойстик вверх) ────────────────
     const jumpNow = Phaser.Input.Keyboard.JustDown(this._spaceKey)
       || Phaser.Input.Keyboard.JustDown(this._upKey)
       || Phaser.Input.Keyboard.JustDown(this._wKey)
