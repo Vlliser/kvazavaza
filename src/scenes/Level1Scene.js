@@ -450,7 +450,7 @@ export default class Level1Scene extends Phaser.Scene {
     // Тёмный оверлей
     if (!this._introOverlay) {
       this._introOverlay = this.add.graphics().setDepth(500)
-      this._introOverlay.fillStyle(0x000000, 0.75)
+      this._introOverlay.fillStyle(0x000000, 0.82)
       this._introOverlay.fillRect(0, 0, W2, H2)
     }
 
@@ -459,15 +459,29 @@ export default class Level1Scene extends Phaser.Scene {
     // Уберём предыдущий текст
     if (this._introTextObj) {
       this._introTextObj.destroy()
+      this._introTextObj = null
+    }
+
+    // Подсказка «тап чтобы пропустить»
+    if (!this._introHint) {
+      this._introHint = this.add.text(W2 / 2, H2 - 28, '— тап чтобы продолжить —', {
+        fontFamily: 'VT323',
+        fontSize:   '20px',
+        color:      '#9B59B6',
+        alpha:      0.7,
+      }).setOrigin(0.5).setDepth(502)
+      this.tweens.add({ targets: this._introHint, alpha: 0.3, duration: 900, yoyo: true, repeat: -1 })
     }
 
     this._introTextObj = this.add.text(W2 / 2, H2 / 2, text, {
       fontFamily: 'Press Start 2P',
-      fontSize:   '16px',
+      fontSize:   '22px',
       color:      '#E8D5FF',
       stroke:     '#000000',
-      strokeThickness: 5,
+      strokeThickness: 6,
       align:      'center',
+      wordWrap:   { width: W2 * 0.80 },
+      lineSpacing: 10,
     }).setOrigin(0.5).setDepth(501).setAlpha(0)
 
     this.tweens.add({
@@ -477,32 +491,50 @@ export default class Level1Scene extends Phaser.Scene {
       ease: 'Power2',
     })
 
-    // Тап или автоперелистывание
+    // ── Защита от двойного вызова ─────────────────────────────
+    let _advanced = false
     const advance = () => {
+      if (_advanced) return
+      _advanced = true
+
+      // Снимаем слушатель тапа (если вызвано по таймеру)
       this.input.off('pointerdown', advance)
+
       this.tweens.add({
         targets: this._introTextObj,
         alpha:   0,
-        duration: 300,
+        duration: 250,
         onComplete: () => this._showIntroCard(index + 1),
       })
     }
 
-    this.time.delayedCall(2000, advance)
+    // Автопереход через 2.5 сек
+    this._introTimer = this.time.delayedCall(2500, advance)
+    // Тап ускоряет
     this.input.once('pointerdown', advance)
   }
 
   _endIntro() {
+    // Убираем подсказку
+    if (this._introHint) {
+      this._introHint.destroy()
+      this._introHint = null
+    }
+
     // Убираем оверлей
-    this.tweens.add({
-      targets:  this._introOverlay,
-      alpha:    0,
-      duration: 500,
-      onComplete: () => {
-        this._introOverlay.destroy()
-        this._introOverlay = null
-      },
-    })
+    if (this._introOverlay) {
+      this.tweens.add({
+        targets:  this._introOverlay,
+        alpha:    0,
+        duration: 500,
+        onComplete: () => {
+          if (this._introOverlay) {
+            this._introOverlay.destroy()
+            this._introOverlay = null
+          }
+        },
+      })
+    }
     if (this._introTextObj) {
       this._introTextObj.destroy()
       this._introTextObj = null
