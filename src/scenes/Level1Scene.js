@@ -213,20 +213,20 @@ export default class Level1Scene extends Phaser.Scene {
       this._stars.push(s)
     }
 
-    // Силуэт города (задний план) — медленный скролл
-    this._cityBg = this.add.graphics()
-    this._cityBgX = 0
-    this._drawCityBackground(this._cityBg, 0)
+    // Силуэт города — запекаем в RenderTexture ОДИН РАЗ, потом двигаем через setX
+    this._bakeCityBackground()
 
-    // Дорога/тротуар — средний скролл
-    this._roadGraphics = this.add.graphics()
-    this._roadX = 0
-    this._drawRoad(this._roadGraphics, 0)
+    // Дорога/тротуар — тоже запекаем один раз, двигаем через setX
+    this._bakeRoad()
   }
 
-  // Рисуем силуэты зданий
-  _drawCityBackground(g, offsetX) {
-    g.clear()
+  // ── Запекание города в RenderTexture (выполняется один раз при старте) ──
+  _bakeCityBackground() {
+    // Рисуем 2× ширину для бесшовного скролла
+    const BW = W * 2
+    const BH = H
+
+    const g = this.add.graphics()
     g.fillStyle(0x0A0818, 1)
 
     const buildings = [
@@ -240,46 +240,76 @@ export default class Level1Scene extends Phaser.Scene {
       { x: 640, w: 55,  h: 130 },
       { x: 710, w: 85,  h: 150 },
       { x: 800, w: 60,  h: 95  },
-      // Дублируем для бесшовного скролла
-      { x: 870, w: 80,  h: 140 },
-      { x: 970, w: 100, h: 180 },
-      { x: 1080, w: 90, h: 160 },
+      // Повтор для второй половины (бесшовный скролл)
+      { x: 900,  w: 80,  h: 140 },
+      { x: 1000, w: 60,  h: 100 },
+      { x: 1070, w: 100, h: 180 },
+      { x: 1180, w: 50,  h: 120 },
+      { x: 1240, w: 90,  h: 160 },
+      { x: 1340, w: 70,  h: 110 },
+      { x: 1420, w: 110, h: 200 },
+      { x: 1540, w: 55,  h: 130 },
+      { x: 1610, w: 85,  h: 150 },
+      { x: 1700, w: 60,  h: 95  },
     ]
 
     const groundY = GROUND_Y - 4
+    // Рисуем здания и окна (фиксированные, без Math.random)
+    const windowSeed = 42
+    let wsIdx = 0
+    const ws = [1,0,1,1,0,1,0,1,1,1,0,1,1,0,0,1,1,0,1,1,0,1,0,1,1,0,1,1,1,0]
     for (const b of buildings) {
-      const bx = ((b.x - offsetX) % (W + 200) + (W + 200)) % (W + 200) - 100
-      g.fillRect(bx, groundY - b.h, b.w, b.h)
-
-      // Окна
+      g.fillStyle(0x0A0818, 1)
+      g.fillRect(b.x, groundY - b.h, b.w, b.h)
       g.fillStyle(0x2C2060, 0.7)
       for (let wy = groundY - b.h + 10; wy < groundY - 10; wy += 20) {
-        for (let wx = bx + 8; wx < bx + b.w - 8; wx += 16) {
-          if (Math.random() > 0.4) {
+        for (let wx = b.x + 8; wx < b.x + b.w - 8; wx += 16) {
+          if (ws[wsIdx % ws.length]) {
             g.fillRect(wx, wy, 8, 10)
           }
+          wsIdx++
         }
       }
-      g.fillStyle(0x0A0818, 1) // сброс
     }
+
+    g.generateTexture('city_bg_tex', BW, BH)
+    g.destroy()
+
+    // Два спрайта рядом для бесшовного скролла
+    this._cityBgSprite1 = this.add.image(0, 0, 'city_bg_tex').setOrigin(0, 0).setDepth(1)
+    this._cityBgSprite2 = this.add.image(BW, 0, 'city_bg_tex').setOrigin(0, 0).setDepth(1)
+    this._cityBgScrollX = 0
+    this._cityBgWidth = BW
   }
 
-  // Рисуем дорогу
-  _drawRoad(g, offsetX) {
-    g.clear()
+  // ── Запекание дороги в RenderTexture (один раз) ──
+  _bakeRoad() {
+    // Рисуем дорогу шириной 800px (далее зациклим через setX)
+    const g = this.add.graphics()
+
     // Асфальт
     g.fillStyle(0x1A1A28, 1)
-    g.fillRect(0, GROUND_Y - 4, W, H - GROUND_Y + 4)
-    // Разметка (прерывистая линия)
+    g.fillRect(0, GROUND_Y - 4, W * 2, H - GROUND_Y + 4)
+    // Разметка
     g.fillStyle(0x4A4A60, 0.7)
     const lineY = GROUND_Y + 18
-    for (let x = -offsetX % 80; x < W + 80; x += 80) {
+    for (let x = 0; x < W * 2 + 80; x += 80) {
       g.fillRect(x, lineY, 50, 4)
     }
     // Бордюр
     g.fillStyle(0x888899, 0.5)
-    g.fillRect(0, GROUND_Y - 6, W, 4)
+    g.fillRect(0, GROUND_Y - 6, W * 2, 4)
+
+    g.generateTexture('road_tex', W * 2, H)
+    g.destroy()
+
+    this._roadSprite1 = this.add.image(0, 0, 'road_tex').setOrigin(0, 0).setDepth(2)
+    this._roadSprite2 = this.add.image(W * 2, 0, 'road_tex').setOrigin(0, 0).setDepth(2)
+    this._roadScrollX = 0
+    this._roadTexWidth = W * 2
   }
+
+  // (дорога теперь запечена в _bakeRoad — этот метод не нужен)
 
   // Снег под ногами
   _drawSnowGround() {
@@ -483,17 +513,22 @@ export default class Level1Scene extends Phaser.Scene {
   }
 
   _updateShadowAura() {
+    // Аура обновляется максимум 8 раз в секунду (throttle)
+    const now = this.time.now
+    if (now - (this._lastAuraUpdate || 0) < 125) return
+    this._lastAuraUpdate = now
+
     this._shadowAura.clear()
     if (!this._shadow || !this._shadow.active) return
     const sx = this._shadow.x
     const sy = this._shadow.y
 
     // Ореол темноты и фиолетово-красного свечения
-    this._shadowAura.fillStyle(0x7E22CE, 0.22) // фиолетовый туман
+    this._shadowAura.fillStyle(0x7E22CE, 0.22)
     this._shadowAura.fillCircle(sx, sy - 8, 55)
-    this._shadowAura.fillStyle(0xDC2626, 0.28) // зловещий алый ореол
+    this._shadowAura.fillStyle(0xDC2626, 0.28)
     this._shadowAura.fillCircle(sx + 8, sy - 12, 34)
-    this._shadowAura.fillStyle(0x050010, 0.5)  // ядро тьмы
+    this._shadowAura.fillStyle(0x050010, 0.5)
     this._shadowAura.fillCircle(sx, sy, 22)
   }
 
@@ -1164,11 +1199,16 @@ export default class Level1Scene extends Phaser.Scene {
     const meters = Math.floor(this._distance / 10)
     this._hud.setDistance(meters)
 
-    // ── Скролл фона ───────────────────────────────────────
-    this._cityBgX = (this._cityBgX + currentSpeed * 0.3 * dt) % (W + 200)
-    this._roadX   = (this._roadX   + currentSpeed * 1.0 * dt) % 80
-    this._drawCityBackground(this._cityBg, this._cityBgX)
-    this._drawRoad(this._roadGraphics, this._roadX)
+    // ── Скролл фона (через setX — без перерисовки!) ───────
+    this._cityBgScrollX -= currentSpeed * 0.3 * dt
+    if (this._cityBgScrollX <= -this._cityBgWidth) this._cityBgScrollX += this._cityBgWidth
+    this._cityBgSprite1.setX(this._cityBgScrollX)
+    this._cityBgSprite2.setX(this._cityBgScrollX + this._cityBgWidth)
+
+    this._roadScrollX -= currentSpeed * dt
+    if (this._roadScrollX <= -this._roadTexWidth) this._roadScrollX += this._roadTexWidth
+    this._roadSprite1.setX(this._roadScrollX)
+    this._roadSprite2.setX(this._roadScrollX + this._roadTexWidth)
 
     // ── Снег ──────────────────────────────────────────────
     this._updateSnow(delta)
