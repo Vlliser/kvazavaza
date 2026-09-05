@@ -26,7 +26,7 @@ const MALECHKA_X    = 180       // Малечка стоит на одном X (
 const BASE_SPEED    = 220       // начальная скорость мира (px/s)
 const SPEED_ACCEL   = 3         // ускорение каждую секунду
 const MAX_SPEED     = 360
-const SHADOW_START  = -120      // стартовая позиция тени (180 - 120 = 60px, видна слева!)
+const SHADOW_START  = -160      // стартовая позиция тени (больше форы для комфортного старта)
 const SHADOW_CATCH  = -25       // тень поймала Малечку (180 - 25 = 155px)
 const DANGER_DIST   = -65       // порог предупреждения (тень ближе 65px)
 const JUMP_VEL      = -520      // скорость прыжка
@@ -171,23 +171,13 @@ export default class Level1Scene extends Phaser.Scene {
     this._coinTimer     = null
     this._boostSpawnTimer = null
 
-    // ── Очистка при завершении сцены ─────────────────────
-    this.events.once('shutdown', this.shutdown, this)
-
     // ── Запуск игры (при ретрае сразу бежим без повтора интро!) ──
-    this.cameras.main.setAlpha(0)
-    this.tweens.add({
-      targets:  this.cameras.main,
-      alpha:    1,
-      duration: 300,
-      onComplete: () => {
-        if (this._isRetry) {
-          this._endIntro()
-        } else {
-          this._startIntro()
-        }
-      }
-    })
+    this.cameras.main.fadeIn(300)
+    if (this._isRetry) {
+      this._endIntro()
+    } else {
+      this._startIntro()
+    }
   }
 
   // ──────────────────────────────────────────────────────────
@@ -675,12 +665,14 @@ export default class Level1Scene extends Phaser.Scene {
     Audio.booster()
     this._hud.boosterPopup(MALECHKA_X, GROUND_Y - 80)
 
-    // Эффект свечения
+    // Эффект свечения: тинт через setTint (НЕ tween!), анимация через alpha
+    this._malechka.setTint(0x00FFFF)
     this.tweens.add({
       targets:  this._malechka,
-      tint:     0x00FFFF,
-      duration: 200,
-      yoyo: true,
+      alpha:    0.7,
+      duration: 120,
+      yoyo:     true,
+      repeat:   3,
     })
   }
 
@@ -701,8 +693,8 @@ export default class Level1Scene extends Phaser.Scene {
     Audio.hit()
     this.cameras.main.shake(220, 0.014)
 
-    // Тень совершает рывок вперёд!
-    this._shadowDelta += 38
+    // Тень совершает рывок вперёд (умеренно, чтобы игрок мог оправиться)
+    this._shadowDelta += 26
 
     // Мигание: тинт ЧЕРЕЗ setTint() — НЕ через tween (tint нельзя тинговать!)
     this._stumbleTimer = 1400
@@ -730,7 +722,11 @@ export default class Level1Scene extends Phaser.Scene {
   }
 
   _onCoin(malechka, coin) {
-    if (coin._shine) coin._shine.destroy()
+    if (coin._shine) {
+      this.tweens.killTweensOf(coin._shine)
+      coin._shine.destroy()
+    }
+    this.tweens.killTweensOf(coin)
     coin.destroy()
     this._coins++
     this._hud.addCoins(1)
@@ -739,15 +735,16 @@ export default class Level1Scene extends Phaser.Scene {
     Audio.coin()
 
     // Сбор монет отталкивает тень назад!
-    this._shadowDelta = Math.max(this._shadowDelta - 12, SHADOW_START - 20)
+    this._shadowDelta = Math.max(this._shadowDelta - 18, SHADOW_START - 20)
   }
 
   _onBooster(malechka, booster) {
+    this.tweens.killTweensOf(booster)
     booster.destroy()
     this._activateBooster()
 
     // Бустер отталкивает тень далеко назад!
-    this._shadowDelta = Math.max(this._shadowDelta - 45, SHADOW_START - 30)
+    this._shadowDelta = Math.max(this._shadowDelta - 60, SHADOW_START - 30)
   }
 
   // ──────────────────────────────────────────────────────────
@@ -767,18 +764,28 @@ export default class Level1Scene extends Phaser.Scene {
     this._malechka.setAngularVelocity(250)
     this._malechka.setTint(0xFF4444)
 
-    this._joystick.setVisible(false)
-    this._buttons.setVisible(false)
+    this._joystick?.setVisible(false)
+    this._buttons?.setVisible(false)
 
-    // Быстрый и плавный переход на экран смерти
-    this.time.delayedCall(600, () => {
-      this.cameras.main.fadeOut(300)
-      this.time.delayedCall(300, () => {
+    // Плавный переход на экран смерти
+    this.time.delayedCall(450, () => {
+      this.cameras.main.fadeOut(250)
+      this.cameras.main.once('camerafadeoutcomplete', () => {
         this.scene.start('DeathScene', {
           fromScene: 'Level1Scene',
           levelNum:  1,
           nextScene: 'LevelMapScene',
         })
+      })
+      // Гарантированный fallback таймер
+      this.time.delayedCall(300, () => {
+        if (this.scene.isActive('Level1Scene')) {
+          this.scene.start('DeathScene', {
+            fromScene: 'Level1Scene',
+            levelNum:  1,
+            nextScene: 'LevelMapScene',
+          })
+        }
       })
     })
   }
@@ -1037,7 +1044,7 @@ export default class Level1Scene extends Phaser.Scene {
 
     container.add([bg, lbl])
     container.setSize(BW, BH)
-    container.setInteractive({ useHandCursor: true })
+    container.setInteractive(new Phaser.Geom.Rectangle(-BW / 2, -BH / 2, BW, BH), Phaser.Geom.Rectangle.Contains)
 
     container.on('pointerdown', () => {
       Audio.uiClick()
@@ -1211,8 +1218,8 @@ export default class Level1Scene extends Phaser.Scene {
     }
 
     // ── Тень ─────────────────────────────────────────────
-    // Тень плавно сокращает дистанцию
-    const shadowGain = (currentSpeed * 0.015 + 1.2) * dt
+    // Тень плавно сокращает дистанцию (сбалансированная скорость)
+    const shadowGain = (currentSpeed * 0.010 + 0.8) * dt
     this._shadowDelta = Math.min(this._shadowDelta + shadowGain, SHADOW_CATCH)
 
     const sx = MALECHKA_X + this._shadowDelta
@@ -1242,14 +1249,18 @@ export default class Level1Scene extends Phaser.Scene {
   // SHUTDOWN
   // ──────────────────────────────────────────────────────────
   shutdown() {
-    this.tweens.killAll()
-    this.time.removeAllEvents()
-    this._joystick?.destroy()
-    this._buttons?.destroy()
-    this._hud?.destroy()
-    if (this._spawnTimer)      this._spawnTimer.remove()
-    if (this._coinTimer)       this._coinTimer.remove()
-    if (this._boostSpawnTimer) this._boostSpawnTimer.remove()
-    if (this._ambientTimer)    this._ambientTimer.remove()
+    try {
+      if (this._spawnTimer)      { this._spawnTimer.remove(); this._spawnTimer = null }
+      if (this._coinTimer)       { this._coinTimer.remove(); this._coinTimer = null }
+      if (this._boostSpawnTimer) { this._boostSpawnTimer.remove(); this._boostSpawnTimer = null }
+      if (this._ambientTimer)    { this._ambientTimer.remove(); this._ambientTimer = null }
+      this.time.removeAllEvents()
+      this.tweens.killAll()
+      this._joystick?.destroy()
+      this._buttons?.destroy()
+      this._hud?.destroy()
+    } catch (e) {
+      console.warn('Level1Scene shutdown error:', e)
+    }
   }
 }

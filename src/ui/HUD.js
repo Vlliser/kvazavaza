@@ -185,13 +185,19 @@ export class HUD {
   }
 
   destroy() {
-    if (this._dangerTween) this._dangerTween.stop()
-    this.bg.destroy()
-    this.heartGraphic.destroy()
-    this.coinsText.destroy()
-    this.distText.destroy()
-    this.dangerText.destroy()
-    this.dangerBar.destroy()
+    try {
+      if (this._dangerTween && this._dangerTween.parent) {
+        this._dangerTween.stop()
+      }
+    } catch (e) {}
+    this._dangerTween = null
+
+    if (this.bg?.active)          this.bg.destroy()
+    if (this.heartGraphic?.active) this.heartGraphic.destroy()
+    if (this.coinsText?.active)    this.coinsText.destroy()
+    if (this.distText?.active)     this.distText.destroy()
+    if (this.dangerText?.active)   this.dangerText.destroy()
+    if (this.dangerBar?.active)    this.dangerBar.destroy()
   }
 }
 

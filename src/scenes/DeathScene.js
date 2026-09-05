@@ -145,11 +145,18 @@ export default class DeathScene extends Phaser.Scene {
       this.tweens.add({
         targets:  btn,
         alpha:    1,
-        y:        btn.y,
         duration: 250,
         delay:    i * 60,
       })
     })
+
+    // Текстовая подсказка внизу экрана для мобильных
+    const bottomHint = this.add.text(W / 2, H - 18, '— Тапни по кнопке или экрану для ретрая —', {
+      fontFamily: 'VT323',
+      fontSize:   '16px',
+      color:      '#9B59B6',
+    }).setOrigin(0.5).setDepth(20)
+    this.tweens.add({ targets: bottomHint, alpha: 0.4, duration: 800, yoyo: true, repeat: -1 })
 
     // Горячие клавиши: Пробел или Enter для быстрого ретрая
     this.input.keyboard?.once('keydown-SPACE', () => {
@@ -160,7 +167,7 @@ export default class DeathScene extends Phaser.Scene {
     })
   }
 
-  // ── Фабрика надёжной кнопки (Container) ──────────────────
+  // ── Фабрика надёжной кнопки (Container + Rectangle HitArea) ─
   _makeButton(x, y, label, colorNorm, colorHover, onClick) {
     const W = 300
     const H = 40
@@ -185,13 +192,25 @@ export default class DeathScene extends Phaser.Scene {
 
     container.add([bg, border, txt])
     container.setSize(W, H)
-    container.setInteractive({ useHandCursor: true })
 
-    container.on('pointerdown', () => {
+    // Точный центрированный хитбокс от -W/2 до +W/2
+    const hitRect = new Phaser.Geom.Rectangle(-W / 2, -H / 2, W, H)
+    container.setInteractive(hitRect, Phaser.Geom.Rectangle.Contains)
+
+    let clicked = false
+    const trigger = () => {
+      if (clicked) return
+      clicked = true
       bg.setFillStyle(colorHover, 1)
       this.tweens.add({ targets: container, scaleX: 0.97, scaleY: 0.97, duration: 60, yoyo: true })
       onClick()
-    })
+    }
+
+    container.on('pointerdown', trigger)
+
+    // Также делаем сам прямоугольник фона интерактивным для 100% надёжности
+    bg.setInteractive({ useHandCursor: true })
+    bg.on('pointerdown', trigger)
 
     container.on('pointerover', () => {
       bg.setFillStyle(colorHover, 1)
@@ -243,11 +262,19 @@ export default class DeathScene extends Phaser.Scene {
         delay:    Phaser.Math.Between(0, 800),
         repeat:   -1,
         onRepeat: () => {
-          dot.x = Phaser.Math.Between(0, W)
-          dot.y = y
-          dot.alpha = 0.6
+          if (dot?.active) {
+            dot.x = Phaser.Math.Between(0, W)
+            dot.y = y
+            dot.alpha = 0.6
+          }
         },
       })
     }
+  }
+
+  // ── SHUTDOWN: очистка всех таймеров и твинов ─────────────
+  shutdown() {
+    this.tweens.killAll()
+    this.time.removeAllEvents()
   }
 }
